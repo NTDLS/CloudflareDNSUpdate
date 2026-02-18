@@ -9,8 +9,12 @@ namespace CloudflareDNSUpdate
         static void Main(string[] args)
         {
             var configuration = new ConfigurationBuilder()
-                .AddJsonFile("appsettings.json", false)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
                 .Build();
+
+            Log.Logger = new LoggerConfiguration()
+                .ReadFrom.Configuration(configuration)
+                .CreateLogger();
 
             try
             {

@@ -16,7 +16,7 @@ namespace CloudflareDNSUpdate
 
         public ServiceEntry(IConfigurationRoot configuration)
         {
-            Log.Verbose("Initializing service.");
+            Log.Information("Initializing service.");
             try
             {
                 _configuration = configuration;
@@ -34,14 +34,6 @@ namespace CloudflareDNSUpdate
 
         public void Start()
         {
-            var configuration = new ConfigurationBuilder()
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .Build();
-
-            Log.Logger = new LoggerConfiguration()
-                .ReadFrom.Configuration(configuration)
-                .CreateLogger();
-
             var builder = WebApplication.CreateBuilder();
 
             // Add Hangfire with in-memory storage (no persistence)
@@ -50,7 +42,7 @@ namespace CloudflareDNSUpdate
 
             //builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
 
-            builder.Services.AddSingleton(configuration);
+            builder.Services.AddSingleton(_configuration);
             builder.Services.AddSingleton<EmailHelper>();
 
             builder.Services.AddDistributedMemoryCache();
@@ -105,13 +97,18 @@ namespace CloudflareDNSUpdate
                 Authorization = authFilters
             });
 
+            Log.Information("Initializing job.");
+
             var jobs = new Jobs(_configuration);
 
             var cronExpression = _configuration.GetValue<string?>("Service:CronExpression")
                 ?? throw new Exception("Missing configuration: Service:CronExpression");
 
+            Log.Information("Adding job.");
+
             RecurringJob.AddOrUpdate("Update DNS Entries", () => jobs.Execute(), cronExpression, new RecurringJobOptions { TimeZone = TimeZoneInfo.Local });
 
+            Log.Information("Starting scheduler.");
             app.RunAsync();
         }
     }

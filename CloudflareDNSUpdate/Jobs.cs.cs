@@ -55,10 +55,11 @@ namespace CloudflareDNSUpdate
 
         public async Task Execute()
         {
-            long alreadyRunning;
+            Log.Information("Starting update.");
 
             try
             {
+                long alreadyRunning;
                 lock (Singletons.ReentrantLock)
                 {
                     alreadyRunning = Interlocked.Read(ref Singletons.ReentrantLockValue);
@@ -67,7 +68,7 @@ namespace CloudflareDNSUpdate
 
                 if (alreadyRunning == 0)
                 {
-                    await Do();
+                    await RunProcess();
                 }
                 else
                 {
@@ -92,28 +93,28 @@ namespace CloudflareDNSUpdate
             }
         }
 
-        public async Task Do()
+        public async Task RunProcess()
         {
             using var http = new HttpClient();
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _cloudflareApiToken);
 
             var publicIp = await GetPublicIpv4Async(http);
-            Console.WriteLine($"Public IPv4: {publicIp}");
+            Log.Information($"Public IPv4: {publicIp}");
 
             var zones = await GetAllZonesAsync(http);
-            Console.WriteLine($"Zones found: {zones.Count}");
+            Log.Information($"Zones found: {zones.Count}");
 
             foreach (var zone in zones)
             {
                 if (_includeDomains.Count > 0 && !_includeDomains.Any(d => string.Equals(d, zone.Name, StringComparison.OrdinalIgnoreCase)))
                 {
-                    Console.WriteLine($"[{zone.Name}] Not in include list (skipping).");
+                    Log.Information($"[{zone.Name}] Not in include list (skipping).");
                     continue;
                 }
 
                 if (_excludeDomains.Any(d => string.Equals(d, zone.Name, StringComparison.OrdinalIgnoreCase)))
                 {
-                    Console.WriteLine($"[{zone.Name}] In exclude list (skipping).");
+                    Log.Information($"[{zone.Name}] In exclude list (skipping).");
                     continue;
                 }
 
@@ -139,7 +140,7 @@ namespace CloudflareDNSUpdate
 
                     if (records.Count == 0)
                     {
-                        Console.WriteLine($"[{zone.Name}] No matching A records found (skipping).");
+                        Log.Information($"[{zone.Name}] No matching A records found (skipping).");
                         continue;
                     }
 
@@ -147,7 +148,7 @@ namespace CloudflareDNSUpdate
                     {
                         if (rec.Content == publicIp)
                         {
-                            Console.WriteLine($"[{zone.Name}] {rec.Name} already {publicIp} (ok).");
+                            Log.Information($"[{zone.Name}] {rec.Name} already {publicIp} (ok).");
                             continue;
                         }
 
@@ -163,12 +164,12 @@ namespace CloudflareDNSUpdate
                         };
 
                         await UpdateDnsRecordAsync(http, zone.Id, rec.Id, updated);
-                        Console.WriteLine($"[{zone.Name}] Updated {rec.Name}: {rec.Content} -> {publicIp}");
+                        Log.Information($"[{zone.Name}] Updated {rec.Name}: {rec.Content} -> {publicIp}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[{zone.Name}] ERROR: {ex.Message}");
+                    Log.Error(ex, $"[{zone.Name}] Failed to update records: {ex.Message}");
                 }
             }
         }
